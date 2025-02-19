@@ -20,6 +20,7 @@ const Page = ({ params }: { params: Promise<{ pageName: string }> }) => {
       const resolvedParams = await params
       setPageName(resolvedParams.pageName)
       const servicesList = await getServicesByPageName(resolvedParams.pageName)
+
       if (servicesList) {
         setServices(servicesList)
       }
@@ -32,7 +33,7 @@ const Page = ({ params }: { params: Promise<{ pageName: string }> }) => {
     resolveParamsAndFetchServices()
 
     const ticketNumsFromStorage = localStorage.getItem('ticketNums')
-
+    console.log('ticketNumsFromStorage',ticketNumsFromStorage)
     if (ticketNumsFromStorage && ticketNumsFromStorage !== "undefined" ) {
       const savedTicketNums = JSON.parse(ticketNumsFromStorage)
       setTicketNums(savedTicketNums)
@@ -48,6 +49,7 @@ const Page = ({ params }: { params: Promise<{ pageName: string }> }) => {
 
   const fetchTicketsByIds = async (ticketNums: string[]) => {
     try {
+   
       const fetchedTickets = await getTicketsByIds(ticketNums)
       const validTickets = fetchedTickets?.filter(tk => tk.status !== "FINISHED")
       const validTicketNums = validTickets?.map(tk => tk.num)

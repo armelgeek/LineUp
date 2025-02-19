@@ -130,6 +130,62 @@ export async function deleteServiceById(serviceId: string) {
     }
 }
 
+export async function createPost(email: string, postName: string) {
+    try {
+        const comp = await db.select().from(company).where(eq(company.email, email));
+
+        if (!comp.length) {
+            throw new Error(`Aucune entreprise trouvée avec cet email`);
+        }
+
+        await db.insert(post).values({
+            name: postName,
+            companyId: comp[0].id
+        });
+    } catch (error) {
+        console.error(error)
+    }
+}
+
+export async function deletePost(postId: string) {
+    try {
+        await db.delete(post).where(eq(post.id, postId));
+    } catch (error) {
+        console.error(error)
+    }
+}
+
+export async function getPostsByCompanyEmail(email: string) {
+    try {
+        const comp = await db.select().from(company).where(eq(company.email, email));
+
+        if (!comp.length) {
+            throw new Error(`Aucune entreprise trouvée avec cet email`);
+        }
+
+        const posts = await db.select().from(post).where(eq(post.companyId, comp[0].id));
+        return posts
+
+    } catch (error) {
+        console.error(error)
+    }
+}
+
+export async function getPostNameById(postId: string) {
+    try {
+        const pt = await db.select({ name: post.name }).from(post).where(eq(post.id, postId));
+
+        if (pt.length) {
+            return pt[0].name
+        } else {
+            throw new Error('Poste non trouvé');
+        }
+    } catch (error) {
+        console.error(error)
+    }
+}
+
+
 export async function getCompanyPageName(email: string) {
     try {
         const comp = await db.select({ pageName: company.pageName }).from(company).where(eq(company.email, email));
