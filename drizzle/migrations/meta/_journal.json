@@ -8,6 +8,13 @@
       "when": 1739047119776,
       "tag": "0000_deep_garia",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1739972489048,
+      "tag": "0001_zippy_ezekiel",
+      "breakpoints": true
     }
   ]
 }
