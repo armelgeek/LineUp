@@ -121,7 +121,7 @@ const Page = ({ params }: { params: Promise<{ pageName: string }> }) => {
             value={selectedServiceId || ''}
           >
             <option disabled value="">Choisissez un service</option>
-            {services.map((service: unknown) => (
+            {services.map((service) => (
               <option key={service.id} value={service.id}>
                 {service.name} - ({service.avgTime} min)
               </option>

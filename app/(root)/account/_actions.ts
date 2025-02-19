@@ -121,7 +121,7 @@ export async function getServicesByEmail(email: string) {
     }
 }
 
-export async function deleteServiceById(serviceId: number) {
+export async function deleteServiceById(serviceId: string) {
     if (!serviceId) return;
     try {
         await db.delete(service).where(eq(service.id, serviceId.toString()));
