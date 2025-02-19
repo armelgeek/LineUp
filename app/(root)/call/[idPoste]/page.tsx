@@ -6,8 +6,9 @@ import { auth } from '@/auth';
 const Page = async ({ params }: { params: Promise<{ idPoste: string }> }) => {
     const session = await auth.api.getSession({ headers: await headers() });
     const email = session?.user?.email as string | undefined;
+     const resolvedParams = await params;
     return (
-        <CallComponent params={params} email={email ?? ""} />
+        <CallComponent idPoste={resolvedParams.idPoste} email={email ?? ""} />
     )
 }
 

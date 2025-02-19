@@ -6,9 +6,10 @@ import { headers } from 'next/headers';
 const Page = async ({ params }: { params: Promise<{ idPoste: string }> }) => {
   const session = await auth.api.getSession({ headers: await headers() });
   const email = session?.user?.email as string | undefined;
+const { idPoste } = await params;
   return (
     <>
-      <PostComponent params={params} email={email ?? ""}  />
+      <PostComponent idPoste={idPoste} email={email ?? ""}  />
     </>
   );
 }

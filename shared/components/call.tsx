@@ -6,24 +6,22 @@ import { useState } from 'react'
 import TicketComponent, { TicketType } from './ticket'
 import { getLastTicketByEmail, getPostNameById, updateTicketStatus } from '@/app/(root)/account/_actions'
 
-const CallComponent = ({email, params}: {email: string, params: Promise<{ idPoste: string }>}) => {
+const CallComponent = ({email, idPoste}: {email: string, idPoste: string}) => {
     
-    const [idPoste, setIdPoste] = useState<string | null>(null)
     const [ticket, setTicket] = useState<TicketType | null>(null)
     const [namePoste, setNamePoste] = useState<string | null>(null)
     const router = useRouter()
-
+    console.log('id poste',idPoste);
     const getData = async () => {
         try {
             if (email) {
-                const resolvedParams = await params;
-                setIdPoste(resolvedParams.idPoste)
-                const data = await getLastTicketByEmail(email, resolvedParams.idPoste)
+    
+                const data = await getLastTicketByEmail(email,idPoste)
                 if (data) {
                     setTicket(data)
                 }
 
-                const postName = await getPostNameById(resolvedParams.idPoste)
+                const postName = await getPostNameById(idPoste)
                 if (postName) {
                     setNamePoste(postName)
                 }
@@ -36,7 +34,7 @@ const CallComponent = ({email, params}: {email: string, params: Promise<{ idPost
 
     useEffect(() => {
         getData()
-    }, [email, params])
+    }, [email, idPoste])
 
     const handleStatusChange = async (newStatus: string) => {
         if (ticket) {

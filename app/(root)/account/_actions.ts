@@ -6,7 +6,7 @@ import { auth } from '@/auth';
 import { service } from "@/drizzle/schema/service";
 import { db } from "@/drizzle/db";
 import { company } from "@/drizzle/schema/company";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { ticket } from "@/drizzle/schema/ticket";
 import { post } from "@/drizzle/schema/post";
 export async function updateName(data: FormData) {
@@ -224,16 +224,53 @@ export async function createTicket(serviceId: string, nameComplete: string) {
         console.error(error);
     }
 }
-
 export async function getPendingTicketsByEmail(email: string) {
     try {
-        const comp = await db.select().from(company).where(eq(company.email, email));
-        if (!comp.length) throw new Error(`Aucune entreprise trouvée avec cet email`);
+        const results = await db
+            .select({
+                ticket: {
+                    id: ticket.id,
+                    serviceId: ticket.serviceId,
+                    num: ticket.num,
+                    nameComplete: ticket.nameComplete,
+                    status: ticket.status,
+                    createdAt: ticket.createdAt,
+                    postId: ticket.postId,
+                    postName: ticket.postName,
+                },
+                service: {
+                    name: service.name,
+                    avgTime: service.avgTime,
+                },
+                post: {
+                    id: post.id,
+                    name: post.name,
+                },
+            })
+            .from(ticket)
+            .innerJoin(service, eq(ticket.serviceId, service.id))
+            .innerJoin(company, eq(service.companyId, company.id))
+            .leftJoin(post, eq(ticket.postId, post.id))
+            .where(
+                and(
+                    eq(company.email, email),
+                    inArray(ticket.status, ["PENDING", "CALL", "IN_PROGRESS"])
+                )
+            )
+            .orderBy(ticket.createdAt);
 
-        const services = await db.select().from(service).where(eq(service.companyId, comp[0].id));
-        const serviceIds = services.map(s => s.id);
+        if (!results.length) {
+            throw new Error(`Aucune entreprise trouvée avec l'email : ${email}`);
+        }
 
-        return await db.select().from(ticket).where(inArray(ticket.serviceId, serviceIds)).orderBy(ticket.createdAt);
+        const pendingTickets = results.map(({ ticket, service, post: p }) => ({
+            ...ticket,
+            serviceName: service.name,
+            avgTime: service.avgTime,
+            post: p ? p : null,
+        }));
+
+        return pendingTickets;
     } catch (error) {
         console.error(error);
     }
@@ -241,107 +278,95 @@ export async function getPendingTicketsByEmail(email: string) {
 
 
 export async function getTicketsByIds(ticketNums: string[]) {
-    try {
-        const tickets = await db
-            .select({
-                id: ticket.id,
-                num: ticket.num,
-                nameComplete: ticket.nameComplete,
-                status: ticket.status,
-                createdAt: ticket.createdAt,
-                serviceName: service.name,
-                avgTime: service.avgTime,
-                postId: ticket.postId,
-                postName: post.name
-            })
-            .from(ticket)
-            .innerJoin(service, eq(ticket.serviceId, service.id))
-            .innerJoin(post, eq(ticket.postId, post.id))
-            .where(inArray(ticket.num, ticketNums))
-            .orderBy(ticket.createdAt);
+  try {
+    const results = await db
+      .select({
+        ticket: ticket,
+        service: service,
+        post: post
+      })
+      .from(ticket)
+      .leftJoin(service, eq(ticket.serviceId, service.id))
+      .leftJoin(post, eq(ticket.postId, post.id))
+      .where(inArray(ticket.num, ticketNums))
+      .orderBy(ticket.createdAt);
 
-        if (!tickets.length) {
-            throw new Error('Aucun ticket trouvé');
-        }
-        return tickets;
-    } catch (error) {
-        console.error(error);
+    if (results.length === 0) {
+      throw new Error('Aucun ticket trouvé');
     }
+
+    return results.map(({ ticket, service: srv, post }) => ({
+      ...ticket,
+      serviceName: srv?.name || 'Unknown Service',
+      avgTime: srv?.avgTime || 0,
+      post
+    }));
+  } catch (error) {
+    console.error(error);
+    throw error; 
+  }
 }
 
 export async function getLastTicketByEmail(email: string, idPoste: string) {
     try {
-        const existingTicket = await db.select({
-            id: ticket.id,
-            num: ticket.num,
-            nameComplete: ticket.nameComplete,
-            status: ticket.status,
-            createdAt: ticket.createdAt,
-            serviceName: service.name,
-            avgTime: service.avgTime,
-            postId: ticket.postId,
-            postName: post.name
-        })
+        const existingTicket = await db.select()
             .from(ticket)
-            .innerJoin(service, eq(ticket.serviceId, service.id))
-            .innerJoin(post, eq(ticket.postId, post.id))
+            .leftJoin(service, eq(ticket.serviceId, service.id))
+            .leftJoin(post, eq(ticket.postId, post.id))
             .where(and(
-                eq(post.id, idPoste),
-                inArray(ticket.status, ['CALL', 'IN_PROGRESS'])
+                eq(ticket.postId, idPoste),
+                inArray(ticket.status, ["CALL", "IN_PROGRESS"])
             ))
-            //.orderBy(ticket.createdAt, 'desc')
+            .orderBy(desc(ticket.createdAt))
             .limit(1);
 
-        if (!existingTicket.length) {
-            const tk = await db.select({
-                id: ticket.id,
-                num: ticket.num,
-                nameComplete: ticket.nameComplete,
-                status: ticket.status,
-                createdAt: ticket.createdAt,
-                serviceName: service.name,
-                avgTime: service.avgTime,
-                postId: ticket.postId,
-                postName: post.name
-            })
-                .from(ticket)
-                .innerJoin(service, eq(ticket.serviceId, service.id))
-                .innerJoin(post, eq(ticket.postId, post.id))
-                .where(and(
-                    eq(service.companyId, email),
-                    eq(ticket.status, 'PENDING')
-                ))
-                .orderBy(ticket.createdAt)
-                .limit(1);
-
-            if (!tk.length) {
-                return null;
-            }
-
-            const pt = await db.select().from(post).where(eq(post.id, idPoste));
-
-            if (!pt.length) {
-                console.error(`Aucun poste trouvé pour l'ID: ${idPoste}`);
-                return null;
-            }
-
-            const updatedTicket = await db.update(ticket)
-                .set({
-                    status: 'CALL',
-                    postId: pt[0].id,
-                    postName: pt[0].name
-                })
-                .where(eq(ticket.id, tk[0].id))
-                .returning();
-
+        if (existingTicket.length > 0 && existingTicket[0].service) {
             return {
-                ...updatedTicket,
-                serviceName: '',
-                avgTime: ''
+                ...existingTicket[0].ticket,
+                serviceName: existingTicket[0].service.name,
+                avgTime: existingTicket[0].service.avgTime
             };
         }
 
-        return existingTicket[0];
+        const pendingTicket = await db.select()
+            .from(ticket)
+            .leftJoin(service, eq(ticket.serviceId, service.id))
+            .leftJoin(company, eq(service.companyId, company.id))
+            .where(and(
+                eq(ticket.status, "PENDING"),
+                eq(company.email, email)
+            ))
+            .orderBy(desc(ticket.createdAt))
+            .limit(1);
+
+        if (pendingTicket.length === 0 || !pendingTicket[0].service) return null;
+
+        const postResult = await db.select()
+            .from(post)
+            .where(eq(post.id, idPoste))
+            .limit(1);
+
+        if (postResult.length === 0) {
+            console.error(`Aucun poste trouvé pour l'ID: ${idPoste}`);
+            return null;
+        }
+
+        const updatedTicket = await db.update(ticket)
+            .set({
+                status: "CALL",
+                postId: postResult[0].id,
+                postName: postResult[0].name
+            })
+            .where(eq(ticket.id, pendingTicket[0].ticket.id))
+            .returning();
+
+        if (updatedTicket.length === 0) return null;
+
+        return {
+            ...updatedTicket[0],
+            serviceName: pendingTicket[0].service.name,
+            avgTime: pendingTicket[0].service.avgTime
+        };
     } catch (error) {
         console.error(error);
     }

@@ -4,10 +4,9 @@ import React, { useEffect, useState } from 'react'
 import TicketComponent, { TicketType } from './ticket'
 import { getPendingTicketsByEmail, getPostNameById } from '@/app/(root)/account/_actions'
 
-const PostComponent = ({ params, email }: { params: { idPoste: string }, email: string }) => {
+const PostComponent = ({ idPoste, email }: { idPoste: string, email: string }) => {
  const [tickets, setTickets] = useState<TicketType[]>([])
   const [countdown, setCountdown] = useState<number>(5)
-  const [idPoste, setIdPoste] = useState<string | null>(null)
   const [namePoste, setNamePoste] = useState<string | null>(null)
 
 
@@ -46,10 +45,7 @@ const PostComponent = ({ params, email }: { params: { idPoste: string }, email: 
 
   const getPosteName = async () => {
     try {
-      const resolvedParams = await params;
-      setIdPoste(resolvedParams.idPoste)
-
-      const postName = await getPostNameById(resolvedParams.idPoste)
+      const postName = await getPostNameById(idPoste)
       if (postName)
         setNamePoste(postName)
     } catch (error) {
@@ -59,7 +55,7 @@ const PostComponent = ({ params, email }: { params: { idPoste: string }, email: 
 
   useEffect(() => {
     getPosteName()
-  }, [params])
+  }, [])
 
 
 

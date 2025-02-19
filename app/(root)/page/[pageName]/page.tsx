@@ -49,13 +49,14 @@ const Page = ({ params }: { params: Promise<{ pageName: string }> }) => {
 
   const fetchTicketsByIds = async (ticketNums: string[]) => {
     try {
+        console.log('ticketNums', ticketNums)
    
       const fetchedTickets = await getTicketsByIds(ticketNums)
-      const validTickets = fetchedTickets?.filter(tk => tk.status !== "FINISHED")
-      const validTicketNums = validTickets?.map(tk => tk.num)
+      console.log('fetchedTickets', fetchedTickets);
+      const validTicketNums = fetchedTickets?.map(tk => tk.num)
       localStorage.setItem('ticketNums', JSON.stringify(validTicketNums))
-      if (validTickets)
-        setTickets(validTickets)
+      if (fetchedTickets)
+        setTickets(fetchedTickets)
 
     } catch (error) {
       console.error(error)
@@ -73,6 +74,7 @@ const Page = ({ params }: { params: Promise<{ pageName: string }> }) => {
       setSelectedServiceId(null)
       setNameComplete("")
       const updatedTicketNums = [...ticketNums, ticketNum];
+      console.log('updatedTicketNums', updatedTicketNums)
       setTicketNums(updatedTicketNums)
       localStorage.setItem("ticketNums", JSON.stringify(updatedTicketNums))
 
