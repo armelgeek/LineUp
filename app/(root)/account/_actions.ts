@@ -6,9 +6,9 @@ import { auth } from '@/auth';
 import { service } from "@/drizzle/schema/service";
 import { db } from "@/drizzle/db";
 import { company } from "@/drizzle/schema/company";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { ticket } from "@/drizzle/schema/ticket";
-
+import { post } from "@/drizzle/schema/post";
 export async function updateName(data: FormData) {
   const h = await headers();
   const session = await auth.api.getSession({ headers: h });
@@ -183,10 +183,164 @@ export async function getPendingTicketsByEmail(email: string) {
     }
 }
 
+
+export async function getTicketsByIds(ticketNums: string[]) {
+    try {
+        const tickets = await db
+            .select({
+                id: ticket.id,
+                num: ticket.num,
+                nameComplete: ticket.nameComplete,
+                status: ticket.status,
+                createdAt: ticket.createdAt,
+                serviceName: service.name,
+                avgTime: service.avgTime,
+                postId: ticket.postId,
+                postName: post.name
+            })
+            .from(ticket)
+            .innerJoin(service, eq(ticket.serviceId, service.id))
+            .innerJoin(post, eq(ticket.postId, post.id))
+            .where(inArray(ticket.num, ticketNums))
+            .orderBy(ticket.createdAt);
+
+        if (!tickets.length) {
+            throw new Error('Aucun ticket trouvé');
+        }
+        return tickets;
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+export async function getLastTicketByEmail(email: string, idPoste: string) {
+    try {
+        const existingTicket = await db.select({
+            id: ticket.id,
+            num: ticket.num,
+            nameComplete: ticket.nameComplete,
+            status: ticket.status,
+            createdAt: ticket.createdAt,
+            serviceName: service.name,
+            avgTime: service.avgTime,
+            postId: ticket.postId,
+            postName: post.name
+        })
+            .from(ticket)
+            .innerJoin(service, eq(ticket.serviceId, service.id))
+            .innerJoin(post, eq(ticket.postId, post.id))
+            .where(and(
+                eq(post.id, idPoste),
+                inArray(ticket.status, ['CALL', 'IN_PROGRESS'])
+            ))
+            //.orderBy(ticket.createdAt, 'desc')
+            .limit(1);
+
+        if (!existingTicket.length) {
+            const tk = await db.select({
+                id: ticket.id,
+                num: ticket.num,
+                nameComplete: ticket.nameComplete,
+                status: ticket.status,
+                createdAt: ticket.createdAt,
+                serviceName: service.name,
+                avgTime: service.avgTime,
+                postId: ticket.postId,
+                postName: post.name
+            })
+                .from(ticket)
+                .innerJoin(service, eq(ticket.serviceId, service.id))
+                .innerJoin(post, eq(ticket.postId, post.id))
+                .where(and(
+                    eq(service.companyId, email),
+                    eq(ticket.status, 'PENDING')
+                ))
+                .orderBy(ticket.createdAt)
+                .limit(1);
+
+            if (!tk.length) {
+                return null;
+            }
+
+            const pt = await db.select().from(post).where(eq(post.id, idPoste));
+
+            if (!pt.length) {
+                console.error(`Aucun poste trouvé pour l'ID: ${idPoste}`);
+                return null;
+            }
+
+            const updatedTicket = await db.update(ticket)
+                .set({
+                    status: 'CALL',
+                    postId: pt[0].id,
+                    postName: pt[0].name
+                })
+                .where(eq(ticket.id, tk[0].id))
+                .returning();
+
+            return {
+                ...updatedTicket,
+                serviceName: '',
+                avgTime: ''
+            };
+        }
+
+        return existingTicket[0];
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+
 export async function updateTicketStatus(ticketId: string, newStatus: string) {
     try {
         await db.update(ticket).set({ status: newStatus }).where(eq(ticket.id, ticketId));
     } catch (error) {
         console.error(error);
+    }
+}
+
+export async function get10LstFinishedTicketsByEmail(email: string) {
+    try {
+        const results = await db
+            .select({
+                id: ticket.id,
+                num: ticket.num,
+                nameComplete: ticket.nameComplete,
+                status: ticket.status,
+                createdAt: ticket.createdAt,
+                serviceName: service.name,
+                avgTime: service.avgTime,
+            })
+            .from(ticket)
+            .innerJoin(service, eq(ticket.serviceId, service.id))
+            .innerJoin(company, eq(service.companyId, company.id))
+            .where(and(eq(ticket.status, "FINISHED"), eq(company.email, email)))
+            .orderBy(ticket.createdAt)
+            .limit(10);
+
+        return results;
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+export async function getTicketStatsByEmail(email: string) {
+    try {
+        const results = await db
+            .select({ status: ticket.status })
+            .from(ticket)
+            .innerJoin(service, eq(ticket.serviceId, service.id))
+            .innerJoin(company, eq(service.companyId, company.id))
+            .where(eq(company.email, email));
+
+        const totalTickets = results.length;
+        const resolvedTickets = results.filter(ticket => ticket.status === "FINISHED").length;
+        const pendingTickets = results.filter(ticket => ticket.status === "PENDING").length;
+
+        return { totalTickets, resolvedTickets, pendingTickets };
+    } catch (error) {
+        console.error(error);
+        return { totalTickets: 0, resolvedTickets: 0, pendingTickets: 0 };
     }
 }
