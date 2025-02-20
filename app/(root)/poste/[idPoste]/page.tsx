@@ -8,9 +8,11 @@ const Page = async ({ params }: { params: Promise<{ idPoste: string }> }) => {
   const email = session?.user?.email as string | undefined;
 const { idPoste } = await params;
   return (
-    <>
-      <PostComponent idPoste={idPoste} email={email ?? ""}  />
-    </>
+     <div className="min-h-screen bg-gray-50">
+      <div className="container mx-auto px-4 py-8">
+        <PostComponent idPoste={idPoste} email={email ?? ""}  />
+      </div>
+    </div>
   );
 }
 

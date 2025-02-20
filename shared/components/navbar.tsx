@@ -1,65 +1,117 @@
 "use client"
-import { AudioWaveform, GlobeLock, Menu, X } from "lucide-react";
-import Link from "next/link";
-import React, { useEffect, useState } from "react"
-import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { checkAndAddUser, getCompanyPageName } from "@/app/(root)/account/_actions";
-import SettingsModal from "@/app/(root)/account/settings/setting-modal";
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { LayoutDashboard, Monitor, Settings, LogOut, GlobeLock } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { UserAvatar } from './molecules/user-avatar'
+import { useEffect, useState } from 'react'
+import { checkAndAddUser, getCompanyPageName } from '@/app/(root)/account/_actions'
+import SettingsModal from '@/app/(root)/account/settings/setting-modal'
 
-interface User {
-  email: string;
-  name: string;
-}
+const Navbar = ({session}: {session: any}) => {
+  const pathname = usePathname()
 
-const Navbar = ({ user }: { user: User }) => {  
-  const [pageName, setPageName] = useState<string | null>(null);
+   const [pageName, setPageName] = useState<string | null>(null);
 
-  const navLinks = [
-    { href: "/", label: "Accueil" },
-    { href: "/services", label: "Vos services" },
-    { href: "/poste_list", label: "Vos postes" },
-    { href: "/dashboard", label: "Tableau de bord" },
-  ];
+  const isActive = (path: string) => {
+    return pathname === path
+  }
+
 
   useEffect(() => {
     const init = async () => {
-      if (user.email && user.name) {
-        await checkAndAddUser(user.email, user.name);
-        const page = await getCompanyPageName(user.email);
+      if (session) {
+        await checkAndAddUser(session.user.email, session.user.name);
+        const page = await getCompanyPageName(session.user.email);
         if (page) {
           setPageName(page);
         }
       }
     };
     init();
-  }, [user]);
+  }, [session]);
+
+  const navItems = [
+    {
+      label: 'Dashboard',
+      href: '/dashboard',
+      icon: LayoutDashboard
+    },
+    {
+      label: 'Postes',
+      href: '/poste_list',
+      icon: Monitor
+    },
+    {
+      label: 'Services',
+      href: '/services',
+      icon: Settings
+    }
+  ]
 
   return (
-    <div className="border-b border-base-300 px-5 md:px-[10%] py-4 relative">
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <AudioWaveform className="w-6 h-6 text-primary" />
-          <span className="font-bold text-xl">LineUp</span>
-        </div>
+    <nav className="fixed top-0 left-0 right-0 bg-white border-b z-50">
+      <div className="px-[10%]  relative">
+        <div className="relative flex items-center justify-between py-2">
+          <Link 
+            href="/dashboard" 
+            className="flex items-center space-x-2"
+          >
+            <span className="text-xl font-bold text-blue-600">LineUp</span>
+          </Link>
 
-        <div className="hidden sm:flex items-center gap-2">
-          {navLinks.map(({ href, label }) => (
-            <Button variant="ghost" asChild key={href}>
-              <Link href={href}>{label}</Link>
-            </Button>
-          ))}
-          {pageName && (
-            <Button variant="ghost" asChild>
-              <Link href={`/page/${pageName}`}>
-                <GlobeLock className="w-4 h-4" />
-              </Link>
-            </Button>
-          )}
-              <SettingsModal email={user.email} pageName={pageName} onPageNameChange={setPageName} />
+          <div className="hidden md:flex items-center space-x-4">
+            {navItems.map((item) => {
+              const Icon = item.icon
+              return (
+                <Link 
+                  key={item.href} 
+                  href={item.href}
+                  className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive(item.href)
+                      ? 'bg-blue-50 text-blue-600'
+                      : 'text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon className="w-4 h-4 mr-2" />
+                  {item.label}
+                </Link>
+              )
+            })}
+           
+              {session && <SettingsModal email={session?.user.email} pageName={pageName} onPageNameChange={setPageName} />}
+               {pageName && (
+                <Button variant="secondary" asChild>
+                  <Link target='_blank' href={`/page/${pageName}`}>
+                    <GlobeLock className="w-4 h-4" />
+                    <p className='ml-2'>{pageName}</p>
+                  </Link>
+                </Button>
+              )}
           </div>
+
+            {session ? (
+                <>
+                  
+                  <UserAvatar
+                    isAnonymous={session.user.isAnonymous ?? false}
+                    user={{
+                      name: session.user.name,
+                      email: session.user.email,
+                      avatar: session.user.image,
+                    }}
+                  />
+                </>
+              ) : (
+                <Link href="/login" passHref>
+                  Sign in
+                </Link>
+              )}
+        
+        </div>
       </div>
-    </div>
-  );
-};
-export default Navbar;
+    </nav>
+  )
+}
+
+export default Navbar
