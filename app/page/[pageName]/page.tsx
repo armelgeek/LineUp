@@ -1,29 +1,97 @@
 "use client"
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { createTicket, getTicketsByIds,getServicesByPageName } from '@/app/(root)/account/_actions'
 import TicketComponent, { TicketType } from '@/shared/components/ticket'
 import { Input } from '@/components/ui/input'
 
-const Page = ({ params }: { params: Promise<{ pageName: string }> }) => {
-  const [tickets, setTickets] = useState<TicketType[]>([])
-  const [pageName, setPageName] = useState<string | null>(null)
-  const [services, setServices] = useState<unknown[]>([])
+const Page = ({ params: { pageName } }: { params: { pageName: string } }) => {
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [countdown, setCountdown] = useState(30);
+  const [ticketNums, setTicketNums] = useState<number[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedService, setSelectedService] = useState<any>(null);
+  const [userName, setUserName] = useState('');
+  const [services, setServices] = useState<any[]>([]);
+  const [showCallModal, setShowCallModal] = useState(false);
+  const [calledTickets, setCalledTickets] = useState<any[]>([]);
+  const modalTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Fonction pour jouer le son de notification
+  const playNotification = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.play().catch(e => console.error('Erreur lecture audio:', e));
+    }
+  }, []);
+
+  // Fonction pour gérer l'affichage des tickets appelés
+  const handleCalledTicket = useCallback((ticket: any) => {
+    setCalledTickets(prev => {
+      // Ne pas ajouter si le ticket est déjà dans la file
+      if (prev.some(t => t.id === ticket.id)) return prev;
+      return [...prev, ticket];
+    });
+
+    // Afficher le modal s'il n'est pas déjà visible
+    if (!showCallModal) {
+      setShowCallModal(true);
+      playNotification();
+    }
+  }, [showCallModal, playNotification]);
+
+  // Effet pour gérer la file d'attente des tickets appelés
+  useEffect(() => {
+    if (calledTickets.length > 0 && !showCallModal) {
+      setShowCallModal(true);
+      playNotification();
+    }
+  }, [calledTickets, showCallModal, playNotification]);
+
+  // Effet pour fermer automatiquement le modal après un délai
+  useEffect(() => {
+    if (showCallModal && modalTimeoutRef.current === null) {
+      modalTimeoutRef.current = setTimeout(() => {
+        setShowCallModal(false);
+        modalTimeoutRef.current = null;
+        // Retirer le premier ticket de la file
+        setCalledTickets(prev => prev.slice(1));
+      }, 5000); // 5 secondes d'affichage
+    }
+
+    return () => {
+      if (modalTimeoutRef.current) {
+        clearTimeout(modalTimeoutRef.current);
+        modalTimeoutRef.current = null;
+      }
+    };
+  }, [showCallModal]);
+
+  // Effet pour surveiller les changements de statut des tickets
+  useEffect(() => {
+    const newlyCalledTickets = tickets.filter(
+      ticket => ticket.status === 'CALL' && 
+      !calledTickets.some(called => called.id === ticket.id)
+    );
+
+    newlyCalledTickets.forEach(ticket => {
+      handleCalledTicket(ticket);
+    });
+  }, [tickets, handleCalledTicket]);
+
+  const [pageNameState, setPageNameState] = useState<string | null>(null)
+  const [servicesState, setServicesState] = useState<unknown[]>([])
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null)
   const [nameComplete, setNameComplete] = useState<string>("")
-  const [ticketNums, setTicketNums] = useState<unknown[]>([])
-  const [countdown, setCountdown] = useState<number>(5)
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false)
   const [currentStep, setCurrentStep] = useState<'service' | 'name'>('service')
 
   const resolveParamsAndFetchServices = async () => {
     try {
-      const resolvedParams = await params
-      setPageName(resolvedParams.pageName)
-      const servicesList = await getServicesByPageName(resolvedParams.pageName)
+      setPageNameState(pageName)
+      const servicesList = await getServicesByPageName(pageName)
 
       if (servicesList) {
-        setServices(servicesList)
+        setServicesState(servicesList)
       }
     } catch (error) {
       console.error(error)
@@ -35,6 +103,7 @@ const Page = ({ params }: { params: Promise<{ pageName: string }> }) => {
 
     const ticketNumsFromStorage = localStorage.getItem('ticketNums')
     console.log('ticketNumsFromStorage',ticketNumsFromStorage)
+    
     if (ticketNumsFromStorage && ticketNumsFromStorage !== "undefined" ) {
       const savedTicketNums = JSON.parse(ticketNumsFromStorage)
       setTicketNums(savedTicketNums)
@@ -53,11 +122,11 @@ const Page = ({ params }: { params: Promise<{ pageName: string }> }) => {
         console.log('ticketNums', ticketNums)
    
       const fetchedTickets = await getTicketsByIds(ticketNums)
-      console.log('fetchedTickets', fetchedTickets);
-      const validTicketNums = fetchedTickets?.map(tk => tk.num)
+       const validTickets = fetchedTickets?.filter(tk => tk.status !== "FINISHED")
+      const validTicketNums = validTickets?.map(tk => tk.num)
       localStorage.setItem('ticketNums', JSON.stringify(validTicketNums))
-      if (fetchedTickets)
-        setTickets(fetchedTickets)
+      if (validTickets)
+        setTickets(validTickets)
 
     } catch (error) {
       console.error(error)
@@ -99,46 +168,81 @@ const Page = ({ params }: { params: Promise<{ pageName: string }> }) => {
   }, [countdown , ticketNums])
 
   return (
-    <div className='min-h-screen bg-gradient-to-b from-blue-50 to-white relative'>
-      <div className='container mx-auto px-4 py-8'>
-        {/* En-tête */}
-        <div className="flex justify-between items-center mb-8">
-          <div className="text-2xl font-bold text-blue-900">
-            <span className="bg-blue-100 px-3 py-1 rounded-full">@{pageName}</span>
-          </div>
-          <div className="text-xl text-gray-600">
-            {new Date().toLocaleDateString('fr-FR', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long'
-            })} - {new Date().toLocaleTimeString('fr-FR', {
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
-          </div>
-        </div>
+    <div className='h-screen bg-gradient-to-b from-gray-50 to-white relative overflow-hidden'>
+      {/* Audio pour la notification */}
+      <audio ref={audioRef}>
+        <source src="/notification.mp3" type="audio/mpeg" />
+      </audio>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Section Vidéo */}
-          <div className="lg:col-span-2 rounded-xl overflow-hidden bg-white shadow-lg border border-gray-100">
-            <div className="aspect-video bg-gray-50 relative">
+      <div className='container mx-auto px-4 py-2 h-full flex flex-col'>
+        {/* En-tête */}
+        <header className="bg-white/80 backdrop-blur-md rounded-xl p-3 mb-2 relative overflow-hidden border border-gray-100">
+          <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-pink-500/5 to-red-500/5"></div>
+          
+          <div className="relative flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div className="flex items-center">
+              <h1 className="text-xl font-bold">
+                <span className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-3 py-1.5 rounded-lg">
+                  {pageNameState}
+                </span>
+              </h1>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="flex items-center bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg shadow-sm">
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-lg font-medium">
+                  {new Date().toLocaleDateString('fr-FR', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long'
+                  })}
+                </span>
+              </div>
+
+              <div className="flex items-center bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg shadow-sm">
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-lg font-medium">
+                  {new Date().toLocaleTimeString('fr-FR', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-lg">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+                <span className="text-sm text-gray-600 font-medium">En ligne</span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 flex-1">
+          {/* Section Video */}
+          <div className="lg:col-span-2 rounded-xl overflow-hidden">
+            <div className="w-full h-full bg-gray-50 relative">
               <iframe 
                 className="w-full h-full"
-                src="https://www.youtube.com/watch?v=CZ6s0gJmxYc&list=PLsK0ky04EOdFlLY6r4S-JEgYpFkt53SLl&autoplay=1&mute=1"
+                src="https://www.youtube.com/embed/d51diKTSi2M?autoplay=1&mute=1"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
               ></iframe>
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white/90 to-transparent p-4">
-                <p className="text-lg font-semibold text-blue-900">File d'attente en direct</p>
-              </div>
             </div>
           </div>
 
           {/* Section File d'Attente */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-100">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-blue-900">File d'Attente</h2>
+            <div className="bg-white rounded-xl p-3 shadow-md border border-gray-100 h-full overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-blue-900">File d'attente</h2>
                 <div className="flex items-center space-x-2">
                   <span className="relative flex size-3">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400/30"></span>
@@ -148,38 +252,62 @@ const Page = ({ params }: { params: Promise<{ pageName: string }> }) => {
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {tickets.map((ticket, index) => (
                   <div 
                     key={ticket.id} 
-                    className={`relative overflow-hidden transition-all duration-300 transform hover:scale-102 
-                      ${index === 0 ? 'bg-gradient-to-r from-orange-50 to-white' :
-                        index === 1 ? 'bg-gradient-to-r from-purple-50 to-white' :
-                        index === 2 ? 'bg-gradient-to-r from-blue-50 to-white' :
-                        'bg-gradient-to-r from-green-50 to-white'
-                      } rounded-lg p-4 border border-gray-100`}
+                    className={`relative overflow-hidden transition-all duration-300 transform hover:scale-105 
+                      ${['from-orange-100', 'from-purple-100', 'from-blue-100', 'from-green-100'][index] || 'from-gray-100'} 
+                      to-white bg-gradient-to-r rounded-xl border border-gray-200 shadow-lg hover:shadow-xl`}
                   >
-                    <div className="flex items-center space-x-4">
-                      <div className={`text-4xl font-bold
-                        ${index === 0 ? 'text-orange-500' :
-                          index === 1 ? 'text-purple-500' :
-                          index === 2 ? 'text-blue-500' :
-                          'text-green-500'
-                        }`}>
-                        {ticket.num}
+                    <div className="px-4 py-2 bg-white/50 backdrop-blur-sm border-b border-gray-100 flex justify-between items-center">
+                      <div className="text-sm font-bold text-gray-800">
+                        {ticket.serviceName}
                       </div>
-                      <div>
-                        <div className="font-semibold text-gray-800">Guichet {ticket.counterNumber || '-'}</div>
-                        <div className="text-sm text-gray-600">{ticket.serviceName}</div>
+                      <div className={`
+                        ${ticket.status === 'CALL' ? 'bg-blue-500 animate-pulse' : 
+                          ticket.status === 'IN_PROGRESS' ? 'bg-green-500' : 
+                          ticket.status === 'PENDING' ? 'bg-yellow-500' : 'bg-gray-500'}
+                        text-white text-xs px-3 py-1 rounded-full font-medium tracking-wide shadow-sm`}
+                      >
+                        {ticket.status === 'CALL' ? 'Appelé' :
+                         ticket.status === 'IN_PROGRESS' ? 'En cours' :
+                         ticket.status === 'PENDING' ? 'En attente' : 'Inconnu'}
                       </div>
                     </div>
-                    {index === 0 && (
-                      <div className="absolute top-0 right-0 bg-blue-500 text-white text-xs px-2 py-1 rounded-bl-lg">
-                        En cours
+
+                    <div className="p-3">
+                      <div className="flex  justify-between">
+                        <div className="flex justify-between items-center space-x-3">
+                          <div className={`text-3xl font-black ${['text-orange-600', 'text-purple-600', 'text-blue-600', 'text-green-600'][index] || 'text-gray-600'}`}>
+                            #{ticket.num}
+                          </div>
+                          <div className="flex flex-col">
+                            <div className="flex items-center space-x-2">
+                              <span className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full text-xs font-semibold tracking-wide">
+                                Guichet
+                              </span>
+                              <span className="text-base font-bold text-gray-800">
+                                {ticket.post?.name || 'non assigné'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    )}
+                    </div>
                   </div>
                 ))}
+                {tickets.length === 0 && (
+                  <div className="text-center py-8 bg-white rounded-xl border border-gray-200 shadow-lg">
+                    <div className="bg-blue-50 size-16 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <p className="text-lg font-bold text-gray-900 mb-1">Aucun ticket en attente</p>
+                    <p className="text-sm text-gray-600">Créez un nouveau ticket pour commencer</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -199,7 +327,7 @@ const Page = ({ params }: { params: Promise<{ pageName: string }> }) => {
 
         {/* Modale de création de ticket */}
         {isModalOpen && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-scale-up">
             <div className="bg-white rounded-xl p-6 w-full max-w-2xl mx-4 relative">
               {/* Bouton fermer */}
               <button
@@ -227,7 +355,7 @@ const Page = ({ params }: { params: Promise<{ pageName: string }> }) => {
               <form onSubmit={handleSubmit} className="space-y-6">
                 {currentStep === 'service' ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {services.map((service) => (
+                    {servicesState.map((service) => (
                       <div
                         key={service.id}
                         onClick={() => {
@@ -296,27 +424,40 @@ const Page = ({ params }: { params: Promise<{ pageName: string }> }) => {
           </div>
         )}
 
-        {/* Section Vos Tickets */}
-        {tickets.length > 0 && (
-          <div className="mt-8 bg-white rounded-xl p-6 shadow-lg border border-gray-100">
-            <h3 className="text-lg font-semibold text-blue-900 mb-4">Vos Tickets</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {tickets.map((ticket, index) => (
-                <TicketComponent
-                  key={ticket.id}
-                  ticket={ticket}
-                  totalWaitTime={tickets
-                    .slice(0, index)
-                    .reduce((acc, prevTicket) => acc + prevTicket.avgTime, 0)}
-                  index={index}
-                />
-              ))}
+        {/* Modal pour les tickets appelés */}
+        {showCallModal && calledTickets.length > 0 && (
+          <div className="fixed inset-0 flex items-center justify-center z-50">
+            <div className="absolute inset-0 bg-black/30 backdrop-blur-sm"></div>
+            <div className="relative bg-white rounded-2xl shadow-2xl p-8 max-w-lg w-full mx-4 animate-scale-up">
+              <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2">
+                <div className="relative flex h-4 w-4">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500"></span>
+                </div>
+              </div>
+              
+              <div className="text-center">
+                <div className="text-3xl font-bold text-gray-900 mb-4">
+                  Ticket Appelé
+                </div>
+                <div className="text-6xl font-black text-red-600 mb-6 animate-bounce">
+                  #{calledTickets[0].num}
+                </div>
+                <div className="space-y-4">
+                  <div className="text-xl font-medium text-gray-900">
+                    {calledTickets[0].serviceName}
+                  </div>
+                  <div className="inline-flex items-center px-4 py-2 rounded-full bg-blue-100 text-blue-800 text-lg">
+                    <span className="font-bold">Guichet {calledTickets[0].post?.name || 'non assigné'}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default Page
+export default Page;

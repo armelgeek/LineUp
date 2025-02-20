@@ -289,6 +289,7 @@ export async function getTicketsByIds(ticketNums: string[]) {
       .leftJoin(service, eq(ticket.serviceId, service.id))
       .leftJoin(post, eq(ticket.postId, post.id))
       .where(inArray(ticket.num, ticketNums))
+      .limit(5)
       .orderBy(ticket.createdAt);
 
     if (results.length === 0) {
