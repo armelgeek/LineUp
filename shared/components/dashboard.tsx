@@ -66,12 +66,12 @@ const TicketItem = ({ ticket }: { ticket: TicketType }) => {
         </div>
       </div>
       
-      <div className="bg-gray-50 px-4 py-3 border-t border-gray-100">
+      {ticket.postName && <div className="bg-gray-50 px-4 py-3 border-t border-gray-100">
         <div className="flex items-center justify-between text-sm">
           <span className="text-gray-600">Guichet</span>
-          <span className="font-medium text-gray-900">{ticket.postName || 'Non assigné'}</span>
+          <span className="font-medium text-gray-900">{ticket.postName}</span>
         </div>
-      </div>
+      </div>}
     </div>
   )
 }

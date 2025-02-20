@@ -268,16 +268,16 @@ const Page = ({ params }: { params: { pageName: string } }) => {
                           <div className={`text-3xl font-black ${['text-orange-600', 'text-purple-600', 'text-blue-600', 'text-green-600'][index] || 'text-gray-600'}`}>
                             #{ticket.num}
                           </div>
-                          <div className="flex flex-col">
+                          {ticket.postName && (<div className="flex flex-col">
                             <div className="flex items-center space-x-2">
                               <span className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full text-xs font-semibold tracking-wide">
                                 Guichet
                               </span>
                               <span className="text-base font-bold text-gray-800">
-                                {ticket.post?.name || 'non assigné'}
+                                {ticket.post?.name || ''}
                               </span>
                             </div>
-                          </div>
+                          </div>)}
                         </div>
                       </div>
                     </div>
@@ -439,12 +439,12 @@ const Page = ({ params }: { params: { pageName: string } }) => {
                   <div className="text-xl font-medium text-gray-900">
                     {calledTickets[0].serviceName}
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-4">
+                  {calledTickets[0].post?.name && <div className="bg-blue-50 rounded-lg p-4">
                     <div className="text-sm text-blue-500">Guichet</div>
                     <div className="text-lg font-medium text-blue-900">
-                      {calledTickets[0].post?.name || 'Non assigné'}
+                      {calledTickets[0].post?.name}
                     </div>
-                  </div>
+                  </div>}
                 </div>
               </div>
             </div>

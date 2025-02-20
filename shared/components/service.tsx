@@ -24,7 +24,7 @@ const ServiceComponent = ({email}:{email:string}) => {
     if (serviceName && avgTime > 0 && email) {
       try {
         setLoading(true)
-        await createService(serviceName, avgTime, email)
+        await createService(email,serviceName, avgTime)
         setAvgTime(0)
         setServiceName("")
         fetchServices()

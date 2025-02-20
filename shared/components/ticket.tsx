@@ -1,5 +1,6 @@
-import { Loader } from 'lucide-react';
+import { Loader, User, Clock } from 'lucide-react';
 import React, { useEffect, useState } from 'react'
+
 export type TicketType = {
     id: string;
     serviceId: string;
@@ -12,6 +13,7 @@ export type TicketType = {
     serviceName: string;
     avgTime: number;
 }
+
 interface TicketComponentProps {
     ticket: TicketType;
     index?: number;
@@ -19,86 +21,88 @@ interface TicketComponentProps {
 }
 
 const getStatusBadge = (status: string) => {
+    const baseClasses = 'text-xs font-medium'
     switch (status) {
         case "IN_PROGRESS":
-            return <div className='badge badge-primary'>En cours de traitement</div>
+            return <span className={`${baseClasses} text-blue-600`}>En cours</span>
         case "PENDING":
-            return <div className='badge badge-warning'>En attente</div>
+            return <span className={`${baseClasses} text-amber-600`}>En attente</span>
         case "CALL":
-            return <div className='badge badge-info'>Votre tour</div>
+            return <span className={`${baseClasses} text-emerald-600`}>Votre tour</span>
         case "FINISHED":
-            return <div className='badge badge-success'>Servi</div>
+            return <span className={`${baseClasses} text-gray-600`}>Servi</span>
         default:
-            return <div className='badge badge-primary'>Statut inconnu</div>
+            return <span className={`${baseClasses} text-purple-600`}>Inconnu</span>
     }
 }
 
-
-
 const TicketComponent: React.FC<TicketComponentProps> = ({ ticket, totalWaitTime = 0 }) => {
-
-    const totalHours = Math.floor(totalWaitTime / 60)
-    const totalMinutes = totalWaitTime % 60
-    const formattedTotalWaitTime = `${totalHours}h ${totalMinutes}min`
-
-    const [waitTimeStatus, setWaitTimeStatus] = useState("success")
-    const [formattedRealWaitTime, setFormattedRealWaitTime] = useState("")
+    const [waitTimeStatus, setWaitTimeStatus] = useState<'normal' | 'warning' | 'danger'>('normal')
+    const [formattedRealWaitTime, setFormattedRealWaitTime] = useState('')
 
     useEffect(() => {
+        if (!ticket?.createdAt) return
 
-        if (!ticket || !ticket.createdAt) return
+        const updateWaitTime = () => {
+            const currentTime = new Date().getTime()
+            const createdAtTime = new Date(ticket.createdAt).getTime()
+            const waitTimeInMinutes = (currentTime - createdAtTime) / 60000
 
-        const currentTime = new Date().getTime()
-        const createdAtTime = new Date(ticket.createdAt).getTime()
-        const waitTimeInMinutes = (currentTime - createdAtTime) / 60000
+            const hours = Math.floor(waitTimeInMinutes / 60)
+            const minutes = Math.floor(waitTimeInMinutes % 60)
+            setFormattedRealWaitTime(`${hours}h ${minutes}min`)
 
-        const hours = Math.floor(waitTimeInMinutes / 60)
-        const minutes = Math.floor(waitTimeInMinutes % 60)
-        setFormattedRealWaitTime(`${hours}h ${minutes}min`)
-
-        if (totalWaitTime !== 0) {
-            if (waitTimeInMinutes > totalWaitTime) {
-                setWaitTimeStatus("error")
-            } else {
-                setWaitTimeStatus("success")
+            if (totalWaitTime !== 0) {
+                if (waitTimeInMinutes > totalWaitTime * 1.5) {
+                    setWaitTimeStatus('danger')
+                } else if (waitTimeInMinutes > totalWaitTime) {
+                    setWaitTimeStatus('warning')
+                } else {
+                    setWaitTimeStatus('normal')
+                }
             }
         }
 
-    }, [ticket,totalWaitTime])
+        updateWaitTime()
+        const interval = setInterval(updateWaitTime, 60000)
+        return () => clearInterval(interval)
+    }, [ticket, totalWaitTime])
 
-
-    console.log('status',ticket.status);
     return (
-        <div className='border p-5 border-base-300 rounded-xl flex flex-col space-y-2'>
-
-            <div className='mx-1 text-lg font-semibold'>
-                <span className='text-lg font-semibold text-gray-500 badge'>
-                    #{ticket.num}
-                </span>
-                <span className='font-bold text-xl'>
-                    <span className='ml-2'>
-                        {ticket?.serviceName}
-                    </span>
-                    {ticket.avgTime && (
-                        <span className='badge badge-accent ml-2'>
-                            {ticket.avgTime} min
-                        </span>
-                    )}
-                </span>
-            </div>
-
-            <div className='flex flex-col md:flex-row md:justify-between'>
-                <div className='flex flex-col btn btn-sm w-fit'>
+        <div className='bg-white border rounded-lg overflow-hidden transition-all duration-300 hover:border-accent/50 group'>
+            <div className='p-4'>
+                {/* En-tête avec numéro et statut */}
+                <div className='flex items-center justify-between mb-3'>
+                    <div className='flex items-center gap-3'>
+                        <span className='text-lg font-semibold text-green-500'>#{ticket.num}</span>
+                        <h3 className='font-medium text-base-content/90'>{ticket.serviceName}</h3>
+                    </div>
                     {getStatusBadge(ticket.status)}
                 </div>
-                <div className="flex mt-2 md:mt-0">
-                    <div className='font-semibold capitalize text-md'>
-                        {ticket.nameComplete}
+
+                {/* Info utilisateur et temps */}
+                <div className='space-y-2 text-sm'>
+                    {/* Utilisateur */}
+                    <div className='flex items-center gap-2 text-base-content/70'>
+                        <User size={16} className="text-accent/70" />
+                        <span className='truncate'>{ticket.nameComplete}</span>
+                    </div>
+
+                    {/* Temps d'attente */}
+                    <div className='flex items-center gap-4'>
+                        {/* Temps moyen */}
+                        {ticket.avgTime && (
+                            <div className='flex items-center gap-1.5'>
+                                <Clock size={16} className="text-accent/70" />
+                                <span className='text-base-content/70'>{ticket.avgTime} min</span>
+                            </div>
+                        )}
+
                     </div>
                 </div>
-            </div>
-            <div className='border border-base-300 rounded-xl p-5'>
-                    <span className='badge badge-accent badge-outline'>{ticket.status}</span>
+
+                {/* Barre de progression */}
+               
             </div>
         </div>
     )

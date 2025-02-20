@@ -14,7 +14,7 @@ export function Provider({ children }: ProviderProps) {
   return (
     <QueryClientProvider client={queryClient}>
       <NuqsAdapter>{children}</NuqsAdapter>
-      <ReactQueryDevtools initialIsOpen={false} />
+      
     </QueryClientProvider>
   );
 }
