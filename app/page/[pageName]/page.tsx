@@ -5,14 +5,12 @@ import { createTicket, getTicketsByIds,getServicesByPageName } from '@/app/(root
 import TicketComponent, { TicketType } from '@/shared/components/ticket'
 import { Input } from '@/components/ui/input'
 
-const Page = ({ params: { pageName } }: { params: { pageName: string } }) => {
+const Page = ({ params }: { params: { pageName: string } }) => {
+  const { pageName } = React.use(params);
   const [tickets, setTickets] = useState<any[]>([]);
   const [countdown, setCountdown] = useState(30);
   const [ticketNums, setTicketNums] = useState<number[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedService, setSelectedService] = useState<any>(null);
-  const [userName, setUserName] = useState('');
-  const [services, setServices] = useState<any[]>([]);
   const [showCallModal, setShowCallModal] = useState(false);
   const [calledTickets, setCalledTickets] = useState<any[]>([]);
   const modalTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -28,56 +26,35 @@ const Page = ({ params: { pageName } }: { params: { pageName: string } }) => {
   // Fonction pour gérer l'affichage des tickets appelés
   const handleCalledTicket = useCallback((ticket: any) => {
     setCalledTickets(prev => {
-      // Ne pas ajouter si le ticket est déjà dans la file
       if (prev.some(t => t.id === ticket.id)) return prev;
       return [...prev, ticket];
     });
 
-    // Afficher le modal s'il n'est pas déjà visible
-    if (!showCallModal) {
-      setShowCallModal(true);
-      playNotification();
-    }
-  }, [showCallModal, playNotification]);
+    // Afficher le modal et jouer le son
+    setShowCallModal(true);
+    playNotification();
 
-  // Effet pour gérer la file d'attente des tickets appelés
+    // Réinitialiser le timeout existant si nécessaire
+    if (modalTimeoutRef.current) {
+      clearTimeout(modalTimeoutRef.current);
+    }
+
+    // Définir un nouveau timeout pour fermer le modal
+    modalTimeoutRef.current = setTimeout(() => {
+      setShowCallModal(false);
+      setCalledTickets(prev => prev.slice(1));
+      modalTimeoutRef.current = null;
+    }, 5000); // 15 secondes d'affichage
+  }, [playNotification]);
+
+  // Nettoyer le timeout lors du démontage
   useEffect(() => {
-    if (calledTickets.length > 0 && !showCallModal) {
-      setShowCallModal(true);
-      playNotification();
-    }
-  }, [calledTickets, showCallModal, playNotification]);
-
-  // Effet pour fermer automatiquement le modal après un délai
-  useEffect(() => {
-    if (showCallModal && modalTimeoutRef.current === null) {
-      modalTimeoutRef.current = setTimeout(() => {
-        setShowCallModal(false);
-        modalTimeoutRef.current = null;
-        // Retirer le premier ticket de la file
-        setCalledTickets(prev => prev.slice(1));
-      }, 5000); // 5 secondes d'affichage
-    }
-
     return () => {
       if (modalTimeoutRef.current) {
         clearTimeout(modalTimeoutRef.current);
-        modalTimeoutRef.current = null;
       }
     };
-  }, [showCallModal]);
-
-  // Effet pour surveiller les changements de statut des tickets
-  useEffect(() => {
-    const newlyCalledTickets = tickets.filter(
-      ticket => ticket.status === 'CALL' && 
-      !calledTickets.some(called => called.id === ticket.id)
-    );
-
-    newlyCalledTickets.forEach(ticket => {
-      handleCalledTicket(ticket);
-    });
-  }, [tickets, handleCalledTicket]);
+  }, []);
 
   const [pageNameState, setPageNameState] = useState<string | null>(null)
   const [servicesState, setServicesState] = useState<unknown[]>([])
@@ -167,13 +144,22 @@ const Page = ({ params: { pageName } }: { params: { pageName: string } }) => {
     return () => clearTimeout(timeoutId)
   }, [countdown , ticketNums])
 
+  useEffect(() => {
+    const newlyCalledTickets = tickets.filter(ticket => 
+      (ticket.status === 'CALL') && 
+      !calledTickets.some(called => called.id === ticket.id)
+    );
+
+    if (newlyCalledTickets.length > 0) {
+      newlyCalledTickets.forEach(ticket => {
+        handleCalledTicket(ticket);
+      });
+    }
+  }, [tickets, handleCalledTicket]);
+
   return (
     <div className='h-screen bg-gradient-to-b from-gray-50 to-white relative overflow-hidden'>
-      {/* Audio pour la notification */}
-      <audio ref={audioRef}>
-        <source src="/notification.mp3" type="audio/mpeg" />
-      </audio>
-
+    
       <div className='container mx-auto px-4 py-2 h-full flex flex-col'>
         {/* En-tête */}
         <header className="bg-white/80 backdrop-blur-md rounded-xl p-3 mb-2 relative overflow-hidden border border-gray-100">
@@ -424,31 +410,40 @@ const Page = ({ params: { pageName } }: { params: { pageName: string } }) => {
           </div>
         )}
 
+        {/* Audio pour la notification */}
+        <audio ref={audioRef}>
+          <source src="/notification.mp3" type="audio/mpeg" />
+        </audio>
+
         {/* Modal pour les tickets appelés */}
         {showCallModal && calledTickets.length > 0 && (
           <div className="fixed inset-0 flex items-center justify-center z-50">
-            <div className="absolute inset-0 bg-black/30 backdrop-blur-sm"></div>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
             <div className="relative bg-white rounded-2xl shadow-2xl p-8 max-w-lg w-full mx-4 animate-scale-up">
-              <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2">
-                <div className="relative flex h-4 w-4">
+              {/* Indicateur d'appel */}
+              <div className="absolute -top-3 -right-3">
+                <div className="relative flex h-6 w-6">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500"></span>
+                  <span className="relative inline-flex rounded-full h-6 w-6 bg-red-500"></span>
                 </div>
               </div>
-              
+
               <div className="text-center">
                 <div className="text-3xl font-bold text-gray-900 mb-4">
                   Ticket Appelé
                 </div>
-                <div className="text-6xl font-black text-red-600 mb-6 animate-bounce">
+                <div className="text-7xl font-black text-red-600 mb-6 animate-bounce">
                   #{calledTickets[0].num}
                 </div>
                 <div className="space-y-4">
                   <div className="text-xl font-medium text-gray-900">
                     {calledTickets[0].serviceName}
                   </div>
-                  <div className="inline-flex items-center px-4 py-2 rounded-full bg-blue-100 text-blue-800 text-lg">
-                    <span className="font-bold">Guichet {calledTickets[0].post?.name || 'non assigné'}</span>
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <div className="text-sm text-blue-500">Guichet</div>
+                    <div className="text-lg font-medium text-blue-900">
+                      {calledTickets[0].post?.name || 'Non assigné'}
+                    </div>
                   </div>
                 </div>
               </div>
